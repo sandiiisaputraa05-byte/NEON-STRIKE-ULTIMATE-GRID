@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEON STRIKE: ULTIMATE GRID</title>
+    <style>
+        :root {
+            --neon-blue: #00f2ff;
+            --neon-pink: #ff0055;
+            --bg-dark: #020008;
+        }
+
+        * { touch-action: manipulation; box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg-dark);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            min-height: 100vh; margin: 0;
+            color: var(--neon-blue);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        .score-box { 
+            font-size: 1.5rem; margin-bottom: 10px; 
+            color: var(--neon-pink); text-shadow: 0 0 10px var(--neon-pink); 
+            font-weight: bold; letter-spacing: 2px;
+        }
+
+        #game-wrapper {
+            position: relative;
+            padding: 4px;
+            background: linear-gradient(135deg, var(--neon-blue), transparent, var(--neon-pink));
+            border-radius: 12px;
+            box-shadow: 0 0 40px rgba(0, 242, 255, 0.2);
+        }
+
+        canvas { 
+            display: block; 
+            background-color: #000; 
+            width: 350px; height: 350px; 
+            border-radius: 10px;
+        }
+
+        /* Overlay Styles */
+        .full-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(2, 0, 8, 0.96);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 100; text-align: center; border-radius: 10px;
+        }
+
+        h1 { font-size: 2.2rem; margin-bottom: 20px; text-shadow: 0 0 20px var(--neon-blue); letter-spacing: 4px; }
+        .btn-group { display: flex; flex-direction: column; gap: 12px; width: 70%; }
+
+        .menu-btn {
+            padding: 14px;
+            background: rgba(0, 242, 255, 0.05);
+            border: 2px solid var(--neon-blue);
+            color: var(--neon-blue);
+            font-weight: bold; cursor: pointer;
+            text-transform: uppercase; border-radius: 4px;
+            transition: 0.3s;
+        }
+
+        .menu-btn:hover { background: var(--neon-blue); color: #000; box-shadow: 0 0 25px var(--neon-blue); }
+
+        #mobile-controls {
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: 15px; margin-top: 25px;
+        }
+
+        .ctrl-btn {
+            width: 60px; height: 60px;
+            background: rgba(0, 242, 255, 0.05);
+            border: 1px solid var(--neon-blue);
+            border-radius: 8px; color: var(--neon-blue);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.4rem; box-shadow: 0 0 10px rgba(0, 242, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+
+    <audio id="bgMusic" loop><source src="music.mp3" type="audio/mpeg"></audio>
+
+    <div class="score-box">CORE: <span id="score">0</span></div>
+
+    <div id="game-wrapper">
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+
+        <div id="start-menu" class="full-overlay">
+            <h1>NEON STRIKE</h1>
+            <div class="btn-group">
+                <button class="menu-btn" onclick="initGame(0.08)">Slow Flow</button>
+                <button class="menu-btn" onclick="initGame(0.13)">Cyber Runner</button>
+                <button class="menu-btn" onclick="initGame(0.22)">Overdrive</button>
+            </div>
+        </div>
+
+        <div id="gameover-menu" class="full-overlay" style="display: none;">
+            <h2 style="color: var(--neon-pink); font-size: 1.8rem;">SYSTEM CRASH</h2>
+            <p id="final-score" style="margin-bottom: 25px; color: #fff;">Score: 0</p>
+            <button class="menu-btn" onclick="backToMenu()">Reboot System</button>
+        </div>
+    </div>
+
+    <div id="mobile-controls">
+        <div></div><div class="ctrl-btn" onpointerdown="input('up')">▲</div><div></div>
+        <div class="ctrl-btn" onpointerdown="input('left')">◀</div>
+        <div class="ctrl-btn" onpointerdown="input('down')">▼</div>
+        <div class="ctrl-btn" onpointerdown="input('right')">▶</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const bgMusic = document.getElementById("bgMusic");
+        
+        const gridSize = 20;
+        const tileCount = 20;
+        
+        let snake = [], food = {x: 15, y: 15}, direction = {x: 1, y: 0}, nextDirection = {x: 1, y: 0};
+        let progress = 0, moveSpeed = 0.1, score = 0, gameRunning = false;
+
+        function initGame(speed) {
+            snake = [{x: 10, y: 10}, {x: 9, y: 10}, {x: 8, y: 10}];
+            direction = {x: 1, y: 0}; nextDirection = {x: 1, y: 0};
+            progress = 0; score = 0; moveSpeed = speed;
+            document.getElementById("score").innerText = "0";
+            document.getElementById("start-menu").style.display = "none";
+            document.getElementById("gameover-menu").style.display = "none";
+            gameRunning = true;
+            bgMusic.play().catch(() => {});
+            requestAnimationFrame(gameLoop);
+        }
+
+        function input(dir) {
+            if (dir === 'up' && direction.y === 0) nextDirection = {x: 0, y: -1};
+            if (dir === 'down' && direction.y === 0) nextDirection = {x: 0, y: 1};
+            if (dir === 'left' && direction.x === 0) nextDirection = {x: -1, y: 0};
+            if (dir === 'right' && direction.x === 0) nextDirection = {x: 1, y: 0};
+        }
+
+        window.addEventListener("keydown", e => {
+            if(e.key === "ArrowUp") input('up');
+            if(e.key === "ArrowDown") input('down');
+            if(e.key === "ArrowLeft") input('left');
+            if(e.key === "ArrowRight") input('right');
+        });
+
+        function gameLoop() {
+            if (!gameRunning) return;
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update() {
+            progress += moveSpeed;
+            if (progress >= 1) {
+                progress = 0;
+                direction = nextDirection;
+                const newHead = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+                if (newHead.x < 0 || newHead.x >= tileCount || newHead.y < 0 || newHead.y >= tileCount ||
+                    snake.some((seg, idx) => idx !== 0 && seg.x === newHead.x && seg.y === newHead.y)) {
+                    gameOver(); return;
+                }
+                snake.unshift(newHead);
+                if (newHead.x === food.x && newHead.y === food.y) {
+                    score += 10; document.getElementById("score").innerText = score;
+                    food = {x: Math.floor(Math.random()*tileCount), y: Math.floor(Math.random()*tileCount)};
+                } else { snake.pop(); }
+            }
+        }
+
+        function drawGrid() {
+            ctx.save();
+            // Lapisan 1: Garis Redup
+            ctx.strokeStyle = "rgba(0, 242, 255, 0.08)";
+            ctx.lineWidth = 1;
+            for(let i=0; i<=canvas.width; i+=gridSize) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
+            }
+
+            // Lapisan 2: Titik Persimpangan (Nodes)
+            ctx.fillStyle = "rgba(0, 242, 255, 0.3)";
+            for(let x=0; x<=canvas.width; x+=gridSize) {
+                for(let y=0; y<=canvas.height; y+=gridSize) {
+                    if (Math.random() > 0.98) { // Titik acak berkedip
+                        ctx.shadowBlur = 5; ctx.shadowColor = varColor("--neon-blue");
+                        ctx.fillRect(x-1, y-1, 2, 2);
+                    }
+                }
+            }
+            
+            // Efek Vignette (Pinggiran gelap)
+            let grad = ctx.createRadialGradient(200, 200, 100, 200, 200, 300);
+            grad.addColorStop(0, "transparent");
+            grad.addColorStop(1, "rgba(0,0,0,0.8)");
+            ctx.fillStyle = grad;
+            ctx.fillRect(0,0, canvas.width, canvas.height);
+            ctx.restore();
+        }
+
+        function varColor(name) {
+            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        }
+
+        function draw() {
+            ctx.fillStyle = "#020008";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawGrid();
+
+            // Food (Cyber Core)
+            let pulse = Math.sin(Date.now() / 150) * 3;
+            ctx.fillStyle = "#ff0055"; 
+            ctx.shadowBlur = 15 + pulse; ctx.shadowColor = "#ff0055";
+            ctx.beginPath();
+            ctx.arc(food.x * gridSize + gridSize/2, food.y * gridSize + gridSize/2, (gridSize/3) + (pulse/4), 0, Math.PI*2);
+            ctx.fill();
+
+            // Snake
+            snake.forEach((seg, i) => {
+                let nextSeg = snake[i - 1] || seg;
+                let renderX = (seg.x + (nextSeg.x - seg.x) * progress) * gridSize + gridSize/2;
+                let renderY = (seg.y + (nextSeg.y - seg.y) * progress) * gridSize + gridSize/2;
+                let radius = (gridSize / 2.2) * (1 - (i / snake.length) * 0.5);
+
+                ctx.fillStyle = (i === 0) ? "#00f2ff" : "#0066ff";
+                ctx.shadowBlur = (i === 0) ? 20 : 0; ctx.shadowColor = "#00f2ff";
+                ctx.beginPath(); ctx.arc(renderX, renderY, radius, 0, Math.PI*2); ctx.fill();
+                
+                // Mata ular
+                if (i === 0) {
+                    ctx.fillStyle = "white";
+                    ctx.beginPath(); ctx.arc(renderX, renderY, 2, 0, Math.PI*2); ctx.fill();
+                }
+            });
+            ctx.shadowBlur = 0;
+        }
+
+        function gameOver() {
+            gameRunning = false; bgMusic.pause();
+            document.getElementById("final-score").innerText = "CORE COLLECTED: " + score;
+            document.getElementById("gameover-menu").style.display = "flex";
+        }
+
+        function backToMenu() {
+            document.getElementById("gameover-menu").style.display = "none";
+            document.getElementById("start-menu").style.display = "flex";
+        }
+    </script>
+</body>
+</html>
